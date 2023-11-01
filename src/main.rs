@@ -22,9 +22,15 @@ use clap::Parser;
 
 const FS_INDEX_SAVEID: ProgramId = HexU64(0x8000000000000000);
 
-fn print_imkvdb(_global: GlobalArgs, file: PathBuf, filter_ids: Option<String>) {
-    let mut fp = fs::File::open(file).unwrap();
-    let imkv = imkv::Imkv::read(&mut fp).unwrap();
+fn print_imkvdb(global: GlobalArgs, file: PathBuf, filter_ids: Option<String>) {
+    let imkv = if let Ok(imkv) = Imkv::read(&mut fs::File::open(&file).unwrap()) {
+        imkv
+    } else {
+        let tmpdir = extract_save_tmp(&global, &file);
+        let mut fp = fs::File::open(tmpdir.join("imkvdb.arc")).unwrap();
+        println!("Reading IMKV from save://{tmpdir:?}/imkvdb.arc");
+        Imkv::read(&mut fp).unwrap()
+    };
 
     let filter_ids: HashSet<u64> = filter_ids
         .into_iter()
@@ -154,7 +160,7 @@ fn gen_save(global: GlobalArgs, outdir: PathBuf, saves: Vec<PathBuf>) -> io::Res
     Ok(())
 }
 
-fn update_save(global: GlobalArgs, save_path: PathBuf, saves: Vec<PathBuf>) -> io::Result<()> {
+fn extract_save_tmp(global: &GlobalArgs, save_path: impl AsRef<Path>) -> PathBuf {
     let tmpdir = match global.tmpdir {
         Some(ref dir) => dir.into(),
         None => tempdir("extract-save"),
@@ -162,11 +168,17 @@ fn update_save(global: GlobalArgs, save_path: PathBuf, saves: Vec<PathBuf>) -> i
     fs::create_dir_all(&tmpdir).unwrap();
 
     std::process::Command::new(global.hactoolnet.clone().unwrap_or("hactoolnet".into()))
-        .arg(&save_path)
+        .arg(save_path.as_ref())
         .args(["--disablekeywarns", "-t", "save", "--outdir"])
         .arg(&tmpdir)
         .output()
         .unwrap();
+
+    tmpdir
+}
+
+fn update_save(global: GlobalArgs, save_path: PathBuf, saves: Vec<PathBuf>) -> io::Result<()> {
+    let tmpdir = extract_save_tmp(&global, &save_path);
 
     println!("{tmpdir:?}");
     let mut fp = fs::File::open(tmpdir.join("imkvdb.arc")).unwrap();

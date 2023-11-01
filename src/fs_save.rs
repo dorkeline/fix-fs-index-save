@@ -8,6 +8,12 @@ pub type ProgramId = HexU64;
 #[repr(transparent)]
 pub struct HexU64(pub u64);
 
+impl HexU64 {
+    pub fn new(val: u64) -> Self {
+        Self(val)
+    }
+}
+
 impl fmt::Debug for HexU64 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:016x}", self.0)
